@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cme-gold-report"
+version = "0.1.0"
+description = "Daily CME gold (GC/OG) swing-trading levels report"
+requires-python = ">=3.10"
+dependencies = [
+  "selenium>=4.20",
+  "curl_cffi>=0.7",
+  "pdfplumber>=0.10",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
