@@ -30,6 +30,8 @@ def render_report(
     rows: list[StrikeRow],
     blocks_md: str = "",
     most_active: list[tuple[float, str, int]] | None = None,  # (strike, "C"/"P", volume)
+    flow_map_md: str = "",
+    expected_move_md: str = "",
     notes: Optional[list[str]] = None,
 ) -> str:
     """Render full Markdown report.
@@ -40,6 +42,10 @@ def render_report(
     `blocks_md` : pre-rendered Markdown for the institutional-flow section
                   (typically `block_trades.render_blocks_md(...)`).
     `most_active`: (strike, side, volume) sorted desc.
+    `flow_map_md`: pre-rendered Markdown for the flow-levels-map section
+                  (from ``flow_map.render_flow_map(...)``).
+    `expected_move_md`: optional one-liner describing expected-move from
+                  long-vol trades (from ``flow_map.render_expected_move``).
     """
     most_active = most_active or []
     px = front.settle if front.settle is not None else front.last
@@ -104,6 +110,15 @@ def render_report(
     lines.append("## Institutional flow \u2014 Globex Trade Browser (top block trades)")
     lines.append(blocks_md.strip()
                  or "_No notable gold block trades reported today._")
+    lines.append("")
+
+    # ---- Flow Levels Map (computed from option-flow premium math) ----
+    lines.append("## Flow Levels Map (option-flow derived levels)")
+    if expected_move_md:
+        lines.append(f"_{expected_move_md.strip()}_")
+        lines.append("")
+    lines.append(flow_map_md.strip()
+                 or "_No interpretable option-flow trades for today._")
     lines.append("")
 
     # ---- Plan ----

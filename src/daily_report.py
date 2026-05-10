@@ -20,6 +20,9 @@ from datetime import datetime, timezone
 
 from block_trades import fetch_gold_blocks, render_blocks_md
 from cme_login import ensure_logged_in, make_driver
+from electronic_trades import fetch_gold_electronic_trades
+from flow_levels import FlowLevel, levels_for
+from flow_map import render_expected_move, render_flow_map
 from maxpain import StrikeRow
 from oi_state import annotate_with_delta, store_oi
 from options_api import (
@@ -28,6 +31,9 @@ from options_api import (
     most_active_by_volume, FutureSettle,
 )
 from report import render_report
+from spot_feed import fetch_gc_intraday, parse_block_time_to_utc, spot_at
+from strategy import classify
+from trades import TradeRecord, from_block_trade
 
 
 def _futures_only(td: str, front: FutureSettle, notes: list[str]) -> str:
@@ -100,9 +106,19 @@ def main() -> str:
             gold_blocks = fetch_gold_blocks(drv)
             blocks_md = render_blocks_md(gold_blocks, top_n=8)
         except Exception as e:  # noqa: BLE001
+            gold_blocks = []
             blocks_md = ""
             notes.append(
                 f"_Block-trade scrape failed: {type(e).__name__}: {e}._")
+
+        # 6) Electronic option trades (QuikStrike Globex Trade Browser).
+        #    Returns [] today — see ``electronic_trades.py`` for status.
+        try:
+            elec_trades = fetch_gold_electronic_trades(drv)
+        except Exception as e:  # noqa: BLE001
+            elec_trades = []
+            notes.append(
+                f"_Electronic-trade scrape failed: {type(e).__name__}: {e}._")
 
     except KeyError as e:
         traceback.print_exc(file=sys.stderr)
@@ -132,6 +148,13 @@ def main() -> str:
     rows: list[StrikeRow] = annotate_with_delta("OG", expiry_label, raw_rows)
     store_oi("OG", expiry_label, td_o, raw_rows)
 
+    # Flow-Levels-Map: classify each trade and derive premium-based price
+    # levels.  We currently only use block trades; electronic trades from
+    # the QuikStrike GTB are wired but disabled (see electronic_trades.py).
+    flow_md, expected_md = _build_flow_map(
+        gold_blocks, elec_trades, td=td_f, notes=notes,
+    )
+
     return render_report(
         trade_date=td_f,
         front=_to_report_future(front),
@@ -139,8 +162,65 @@ def main() -> str:
         rows=rows,
         blocks_md=blocks_md,
         most_active=most_active,
+        flow_map_md=flow_md,
+        expected_move_md=expected_md,
         notes=notes,
     )
+
+
+def _build_flow_map(
+    gold_blocks,
+    elec_trades: list[TradeRecord],
+    *,
+    td: str,
+    notes: list[str],
+) -> tuple[str, str]:
+    """Classify each option trade and emit the Flow Levels Map markdown.
+
+    Returns ``(flow_map_md, expected_move_md)``.  Both are empty strings
+    if there is nothing to render.
+    """
+    # Pull intraday GC bars once so each block timestamp can be paired
+    # with a recent spot price for the buy/sell heuristic and bullish/
+    # bearish-target labelling.  This is best-effort — Yahoo can fail.
+    try:
+        bars = fetch_gc_intraday(days=2)
+    except Exception as e:  # noqa: BLE001
+        bars = None
+        notes.append(
+            f"_Intraday GC spot feed unavailable: {type(e).__name__}: {e}._")
+
+    # Convert block trades to the unified TradeRecord model.
+    try:
+        trade_dt = datetime.strptime(td, "%m/%d/%Y")
+    except Exception:  # noqa: BLE001
+        trade_dt = None
+    block_records: list[TradeRecord] = []
+    for b in gold_blocks or []:
+        rec = from_block_trade(b)
+        if trade_dt is not None:
+            rec.time_utc = parse_block_time_to_utc(rec.time_ct, trade_dt)
+        if rec.time_utc is not None and bars is not None:
+            rec.spot_at_trade = spot_at(bars, rec.time_utc)
+        block_records.append(rec)
+
+    all_records: list[TradeRecord] = block_records + list(elec_trades)
+
+    # Classify + price each leg-set.
+    levels: list[FlowLevel] = []
+    for rec in all_records:
+        if not rec.option_legs:
+            continue
+        strat = classify(rec)
+        levels.extend(levels_for(rec, strat))
+
+    if not levels:
+        return "", ""
+
+    spot_now = bars.bars[-1].close if bars and bars.bars else None
+    flow_md = render_flow_map(levels, spot=spot_now, top_n=5)
+    expected_md = render_expected_move(levels)
+    return flow_md, expected_md
 
 
 def _to_report_future(f: FutureSettle):
