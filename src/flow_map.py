@@ -40,6 +40,17 @@ from flow_levels import (
 _RESISTANCE_KINDS = {RESISTANCE, EXPECTED_MOVE_HIGH, RANGE_HIGH}
 _SUPPORT_KINDS = {SUPPORT, EXPECTED_MOVE_LOW, RANGE_LOW}
 
+# Strategy kinds where ``flow_levels.levels_for`` falls back to per-leg
+# analysis (e.g. each leg of a 4-leg structure becomes its own level).
+# These are isolated to a "~per-leg" subsection in the renderer so they
+# don't pollute the primary flow map.
+_PER_LEG_STRATEGY_KINDS = {"complex", "calendar"}
+
+
+def is_per_leg(level: FlowLevel) -> bool:
+    """True if ``level`` came from per-leg fallback (3+ leg / calendar)."""
+    return level.strategy_kind in _PER_LEG_STRATEGY_KINDS
+
 
 @dataclass
 class AggregatedLevel:
@@ -126,25 +137,9 @@ def _short_desc(level: FlowLevel) -> str:
     return level.description
 
 
-def render_flow_map(levels: list[FlowLevel],
-                    *,
-                    spot: Optional[float] = None,
-                    top_n: int = 5,
-                    window: float = 5.0) -> str:
-    """Render aggregated levels as a Markdown sub-section.
-
-    ``spot`` is included so we can sort levels above/below current price
-    and annotate each with its distance.
-    """
-    if not levels:
-        return ("_No flow-derived levels — option-trade scrape returned no "
-                "interpretable trades._")
-
-    clusters = cluster(levels, window=window)
-    if not clusters:
-        return ("_No flow-derived levels — every trade was filtered as "
-                "complex / unsupported._")
-
+def _bucket_clusters(clusters: list[AggregatedLevel],
+                     *, spot: Optional[float]) -> dict[str, list[AggregatedLevel]]:
+    """Group + sort clusters by bucket — closest-to-spot first when known."""
     by_bucket: dict[str, list[AggregatedLevel]] = {
         "resistance": [], "support": [],
         "bullish_target": [], "bearish_target": [],
@@ -153,10 +148,6 @@ def render_flow_map(levels: list[FlowLevel],
         if c.bucket in by_bucket:
             by_bucket[c.bucket].append(c)
 
-    # Within each bucket order:
-    #  resistance / bullish_target — ascending price (closest first when
-    #    spot is known)
-    #  support    / bearish_target — descending price
     if spot is not None:
         by_bucket["resistance"].sort(
             key=lambda a: (abs(a.price - spot) if a.price >= spot else 1e9))
@@ -171,6 +162,39 @@ def render_flow_map(levels: list[FlowLevel],
         by_bucket["bullish_target"].sort(key=lambda a: a.price)
         by_bucket["support"].sort(key=lambda a: -a.price)
         by_bucket["bearish_target"].sort(key=lambda a: -a.price)
+    return by_bucket
+
+
+def render_flow_map(levels: list[FlowLevel],
+                    *,
+                    spot: Optional[float] = None,
+                    top_n: int = 5,
+                    window: float = 5.0) -> str:
+    """Render aggregated levels as a Markdown sub-section.
+
+    ``spot`` is included so we can sort levels above/below current price
+    and annotate each with its distance.
+
+    Levels coming from per-leg fallback (3+ leg / calendar trades — see
+    ``flow_levels`` for context) are surfaced in a dedicated "~per-leg"
+    subsection so they don't dominate the primary buckets.
+    """
+    if not levels:
+        return ("_No flow-derived levels — option-trade scrape returned no "
+                "interpretable trades._")
+
+    primary_levels = [l for l in levels if not is_per_leg(l)]
+    perleg_levels = [l for l in levels if is_per_leg(l)]
+
+    primary_clusters = cluster(primary_levels, window=window)
+    perleg_clusters = cluster(perleg_levels, window=window)
+
+    if not primary_clusters and not perleg_clusters:
+        return ("_No flow-derived levels — every trade was filtered as "
+                "complex / unsupported._")
+
+    primary_by_bucket = _bucket_clusters(primary_clusters, spot=spot)
+    perleg_by_bucket = _bucket_clusters(perleg_clusters, spot=spot)
 
     lines: list[str] = []
 
@@ -196,10 +220,21 @@ def render_flow_map(levels: list[FlowLevel],
                 lines.append(f"    - _… +{len(c.contributing)-3} more_")
         lines.append("")
 
-    section("Resistance / range top", by_bucket["resistance"])
-    section("Support / range bottom", by_bucket["support"])
-    section("Bullish targets", by_bucket["bullish_target"])
-    section("Bearish targets", by_bucket["bearish_target"])
+    if primary_clusters:
+        section("Resistance / range top", primary_by_bucket["resistance"])
+        section("Support / range bottom", primary_by_bucket["support"])
+        section("Bullish targets", primary_by_bucket["bullish_target"])
+        section("Bearish targets", primary_by_bucket["bearish_target"])
+
+    if perleg_clusters:
+        lines.append(
+            "**~per-leg** _(individual legs of multi-leg / calendar "
+            "structures \u2014 treat as informational; the legs interact)_")
+        lines.append("")
+        section("~ Resistance", perleg_by_bucket["resistance"])
+        section("~ Support", perleg_by_bucket["support"])
+        section("~ Bullish targets", perleg_by_bucket["bullish_target"])
+        section("~ Bearish targets", perleg_by_bucket["bearish_target"])
 
     return "\n".join(lines).rstrip() + "\n"
 
