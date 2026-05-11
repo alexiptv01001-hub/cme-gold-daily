@@ -30,6 +30,8 @@ def render_report(
     rows: list[StrikeRow],
     blocks_md: str = "",
     most_active: list[tuple[float, str, int]] | None = None,  # (strike, "C"/"P", volume)
+    flow_map_md: str = "",
+    expected_move_md: str = "",
     notes: Optional[list[str]] = None,
 ) -> str:
     """Render full Markdown report.
@@ -40,6 +42,10 @@ def render_report(
     `blocks_md` : pre-rendered Markdown for the institutional-flow section
                   (typically `block_trades.render_blocks_md(...)`).
     `most_active`: (strike, side, volume) sorted desc.
+    `flow_map_md`: pre-rendered Markdown for the flow-levels-map section
+                  (from ``flow_map.render_flow_map(...)``).
+    `expected_move_md`: optional one-liner describing expected-move from
+                  long-vol trades (from ``flow_map.render_expected_move``).
     """
     most_active = most_active or []
     px = front.settle if front.settle is not None else front.last
@@ -48,82 +54,91 @@ def render_report(
     pw = put_walls(rows, n=3)
 
     lines: list[str] = []
-    lines.append(f"# Gold (GC) — Daily Swing-Trading Levels")
-    lines.append(f"_Trade date: **{trade_date}** • generated "
+    lines.append(f"# Золото (GC) — ежедневные уровни для свинг-трейдинга")
+    lines.append(f"_Торговая сессия: **{trade_date}** • отчёт сгенерирован "
                  f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}_")
     lines.append("")
 
-    # ---- Price ----
-    lines.append("## Price (front-month GC)")
-    lines.append(f"- Contract: **{front.month}**")
-    lines.append(f"- Settlement: **{_fmt_money(front.settle)}**  "
-                 f"(last {_fmt_money(front.last)}, change {_signed(front.change)})")
-    lines.append(f"- Volume: {_fmt_int(front.volume)}  •  "
+    # ---- Цена фронт-месяца ----
+    lines.append("## Цена (фронт-месяц GC)")
+    lines.append(f"- Контракт: **{front.month}**")
+    lines.append(f"- Расчётная цена: **{_fmt_money(front.settle)}**  "
+                 f"(последняя {_fmt_money(front.last)}, изменение {_signed(front.change)})")
+    lines.append(f"- Объём: {_fmt_int(front.volume)}  •  "
                  f"OI: {_fmt_int(front.open_interest)}")
     lines.append("")
 
     # ---- Max Pain ----
-    lines.append(f"## Max Pain — {expiry_label}")
-    lines.append(f"- **Max Pain strike:** ${mp:,.0f}")
+    lines.append(f"## Max Pain (точка максимальной боли) — {expiry_label}")
+    lines.append(f"- **Страйк Max Pain:** ${mp:,.0f}")
     if px is not None:
         delta = mp - px
-        bias = ("market wants to **drift down** to max pain"
-                if delta < -1 else "market wants to **drift up** to max pain"
-                if delta > 1 else "price is right on max pain")
-        lines.append(f"- Distance from price: {delta:+,.0f} pts ({bias})")
+        bias = ("рынок будет **сползать вниз** к Max Pain"
+                if delta < -1 else "рынок будет **подниматься вверх** к Max Pain"
+                if delta > 1 else "цена прямо на Max Pain")
+        lines.append(f"- Расстояние от цены: {delta:+,.0f} п. ({bias})")
     lines.append("")
 
-    # ---- Call walls ----
-    lines.append("## Resistance — Call walls (top-3 by OI)")
-    lines.append("| Strike | Call OI | ΔOI |")
+    # ---- Стены коллов (сопротивление) ----
+    lines.append("## Сопротивление — стены коллов (топ-3 по OI)")
+    lines.append("| Страйк | OI коллов | ΔOI |")
     lines.append("|---:|---:|---:|")
     for r in cw:
         lines.append(f"| ${r.strike:,.0f} | {_fmt_int(r.call_oi)} "
                      f"| {_signed(r.call_oi_change)} |")
     lines.append("")
 
-    # ---- Put walls ----
-    lines.append("## Support — Put walls (top-3 by OI)")
-    lines.append("| Strike | Put OI | ΔOI |")
+    # ---- Стены путов (поддержка) ----
+    lines.append("## Поддержка — стены путов (топ-3 по OI)")
+    lines.append("| Страйк | OI путов | ΔOI |")
     lines.append("|---:|---:|---:|")
     for r in pw:
         lines.append(f"| ${r.strike:,.0f} | {_fmt_int(r.put_oi)} "
                      f"| {_signed(r.put_oi_change)} |")
     lines.append("")
 
-    # ---- Most Active ----
+    # ---- Самые активные страйки ----
     if most_active:
-        lines.append("## Most Active Strikes (by volume yesterday)")
-        lines.append("| Strike | Side | Volume |")
+        lines.append("## Самые активные страйки (по объёму за вчера)")
+        lines.append("| Страйк | Тип | Объём |")
         lines.append("|---:|:---:|---:|")
         for k, side, vol in most_active[:5]:
             lines.append(f"| ${k:,.0f} | {side} | {_fmt_int(vol)} |")
         lines.append("")
 
-    # ---- Block trades (institutional flow from Globex Trade Browser) ----
-    lines.append("## Institutional flow \u2014 Globex Trade Browser (top block trades)")
+    # ---- Блок-сделки (институциональный поток из Globex Trade Browser) ----
+    lines.append("## Институциональный поток \u2014 Globex Trade Browser (крупнейшие блок-сделки)")
     lines.append(blocks_md.strip()
-                 or "_No notable gold block trades reported today._")
+                 or "_Сегодня крупных блок-сделок по золоту не зафиксировано._")
     lines.append("")
 
-    # ---- Plan ----
-    lines.append("## Suggested swing levels")
-    lines.append(f"- Bias to gravitate toward **${mp:,.0f}** (Max Pain) into expiry.")
+    # ---- Карта уровней флоу (математика премии) ----
+    lines.append("## Карта уровней флоу (выведено из опционного потока)")
+    if expected_move_md:
+        lines.append(f"_{expected_move_md.strip()}_")
+        lines.append("")
+    lines.append(flow_map_md.strip()
+                 or "_Сегодня нет интерпретируемых опционных сделок для построения карты._")
+    lines.append("")
+
+    # ---- План ----
+    lines.append("## Предлагаемые уровни для свинг-трейдинга")
+    lines.append(f"- Цена будет тяготеть к **${mp:,.0f}** (Max Pain) к экспирации.")
     if cw:
-        lines.append(f"- Resistance to fade: **${cw[0].strike:,.0f}** "
-                     f"(largest call wall, OI {_fmt_int(cw[0].call_oi)}).")
+        lines.append(f"- Сопротивление для шорта: **${cw[0].strike:,.0f}** "
+                     f"(крупнейшая стена коллов, OI {_fmt_int(cw[0].call_oi)}).")
     if pw:
-        lines.append(f"- Support to buy: **${pw[0].strike:,.0f}** "
-                     f"(largest put wall, OI {_fmt_int(pw[0].put_oi)}).")
+        lines.append(f"- Поддержка для покупки: **${pw[0].strike:,.0f}** "
+                     f"(крупнейшая стена путов, OI {_fmt_int(pw[0].put_oi)}).")
     lines.append("")
 
     if notes:
-        lines.append("## Notes")
+        lines.append("## Заметки")
         for n in notes:
             lines.append(f"- {n}")
         lines.append("")
 
     lines.append("---")
-    lines.append("_Sources: CME Daily Settlements (futures) + QuikStrike Open "
+    lines.append("_Источники: CME Daily Settlements (фьючерсы) + QuikStrike Open "
                  "Interest Profile / Most Active Strikes / Globex Trade Browser._")
     return "\n".join(lines)

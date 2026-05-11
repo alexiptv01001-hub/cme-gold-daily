@@ -30,9 +30,10 @@ def test_render_report_contains_required_sections():
         expiry_label="OG JUN 26 (monthly)", rows=rows,
         blocks_md=blocks_md, most_active=most,
     )
-    for needle in ("# Gold (GC)", "Max Pain", "Call walls", "Put walls",
-                   "Most Active", "Globex Trade Browser",
-                   "Suggested swing levels", "$4,710.0", "$4,700",
+    for needle in ("# Золото (GC)", "Max Pain",
+                   "стены коллов", "стены путов",
+                   "Самые активные", "Globex Trade Browser",
+                   "свинг-трейдинга", "$4,710.0", "$4,700",
                    "OGM6 P4700"):
         assert needle in md, f"missing section/value: {needle!r}"
 
@@ -54,4 +55,4 @@ def test_render_report_handles_empty_blocks():
         expiry_label="OG JUN 26", rows=rows,
         blocks_md="", most_active=[],
     )
-    assert "No notable gold block trades reported today" in md
+    assert "крупных блок-сделок по золоту не зафиксировано" in md
