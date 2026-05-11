@@ -180,8 +180,8 @@ def render_flow_map(levels: list[FlowLevel],
     subsection so they don't dominate the primary buckets.
     """
     if not levels:
-        return ("_No flow-derived levels — option-trade scrape returned no "
-                "interpretable trades._")
+        return ("_Нет уровней из опционного потока — не удалось интерпретировать "
+                "ни одной сделки._")
 
     primary_levels = [l for l in levels if not is_per_leg(l)]
     perleg_levels = [l for l in levels if is_per_leg(l)]
@@ -190,8 +190,8 @@ def render_flow_map(levels: list[FlowLevel],
     perleg_clusters = cluster(perleg_levels, window=window)
 
     if not primary_clusters and not perleg_clusters:
-        return ("_No flow-derived levels — every trade was filtered as "
-                "complex / unsupported._")
+        return ("_Нет уровней из опционного потока — все сделки отфильтрованы "
+                "как complex / неподдерживаемые._")
 
     primary_by_bucket = _bucket_clusters(primary_clusters, spot=spot)
     perleg_by_bucket = _bucket_clusters(perleg_clusters, spot=spot)
@@ -201,7 +201,7 @@ def render_flow_map(levels: list[FlowLevel],
     def section(title: str, items: list[AggregatedLevel]) -> None:
         lines.append(f"**{title}**")
         if not items:
-            lines.append("_(none)_")
+            lines.append("_(нет)_")
             lines.append("")
             return
         for c in items[:top_n]:
@@ -210,33 +210,49 @@ def render_flow_map(levels: list[FlowLevel],
                 d = c.price - spot
                 dist = f"  ({d:+,.0f})"
             tag = f"[{', '.join(sorted(c.venues))}]" if c.venues else ""
+            n = len(c.contributing)
             lines.append(
-                f"- **{_fmt_price(c.price)}**{dist}  •  weight "
+                f"- **{_fmt_price(c.price)}**{dist}  •  вес "
                 f"{_fmt_weight(c.total_weight)}  •  "
-                f"{len(c.contributing)} trade(s) {tag}")
+                f"{n} {_plural_trades(n)} {tag}")
             for l in c.contributing[:3]:
                 lines.append(f"    - _{l.time_ct} CT — {_short_desc(l)}_")
             if len(c.contributing) > 3:
-                lines.append(f"    - _… +{len(c.contributing)-3} more_")
+                lines.append(f"    - _… ещё +{len(c.contributing)-3}_")
         lines.append("")
 
     if primary_clusters:
-        section("Resistance / range top", primary_by_bucket["resistance"])
-        section("Support / range bottom", primary_by_bucket["support"])
-        section("Bullish targets", primary_by_bucket["bullish_target"])
-        section("Bearish targets", primary_by_bucket["bearish_target"])
+        section("Сопротивление / верх диапазона",
+                primary_by_bucket["resistance"])
+        section("Поддержка / низ диапазона",
+                primary_by_bucket["support"])
+        section("Бычьи цели", primary_by_bucket["bullish_target"])
+        section("Медвежьи цели", primary_by_bucket["bearish_target"])
 
     if perleg_clusters:
         lines.append(
-            "**~per-leg** _(individual legs of multi-leg / calendar "
-            "structures \u2014 treat as informational; the legs interact)_")
+            "**~по ногам** _(отдельные ноги многоножных / календарных "
+            "структур \u2014 справочно; ноги взаимодействуют между собой)_")
         lines.append("")
-        section("~ Resistance", perleg_by_bucket["resistance"])
-        section("~ Support", perleg_by_bucket["support"])
-        section("~ Bullish targets", perleg_by_bucket["bullish_target"])
-        section("~ Bearish targets", perleg_by_bucket["bearish_target"])
+        section("~ Сопротивление", perleg_by_bucket["resistance"])
+        section("~ Поддержка", perleg_by_bucket["support"])
+        section("~ Бычьи цели", perleg_by_bucket["bullish_target"])
+        section("~ Медвежьи цели", perleg_by_bucket["bearish_target"])
 
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _plural_trades(n: int) -> str:
+    """Russian plural form for the noun ‘сделка’."""
+    n_abs = abs(n) % 100
+    if 11 <= n_abs <= 14:
+        return "сделок"
+    mod10 = n_abs % 10
+    if mod10 == 1:
+        return "сделка"
+    if 2 <= mod10 <= 4:
+        return "сделки"
+    return "сделок"
 
 
 def render_expected_move(levels: list[FlowLevel]) -> str:
@@ -250,9 +266,9 @@ def render_expected_move(levels: list[FlowLevel]) -> str:
     parts = []
     if em_high:
         biggest = max(em_high, key=lambda l: l.weight)
-        parts.append(f"high {biggest.price:,.2f}")
+        parts.append(f"верх {biggest.price:,.2f}")
     if em_low:
         biggest = max(em_low, key=lambda l: l.weight)
-        parts.append(f"low {biggest.price:,.2f}")
-    return ("Expected-move endpoints implied by long vol trades: "
+        parts.append(f"низ {biggest.price:,.2f}")
+    return ("Ожидаемое движение по длинным vol-сделкам: "
             + " / ".join(parts) + ".")

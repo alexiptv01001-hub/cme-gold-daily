@@ -42,25 +42,25 @@ def _futures_only(td: str, front: FutureSettle, notes: list[str]) -> str:
     def _signed(x):
         return f"({'+' if x>=0 else ''}{x:,.1f})" if x is not None else ""
     lines = [
-        "# Gold (GC) — Daily Levels (futures-only)",
-        f"_Trade date: **{td}** • generated "
+        "# Золото (GC) — ежедневные уровни (только фьючерсы)",
+        f"_Торговая сессия: **{td}** • отчёт сгенерирован "
         f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}_",
         "",
-        "## Price (front-month GC)",
-        f"- Contract: **{front.month}**",
-        f"- Settlement: **{_money(front.settle)}** "
-        f"(last {_money(front.last)}, change {_signed(front.change)})",
-        f"- Volume: {front.volume:,}  •  OI: {front.open_interest:,}"
+        "## Цена (фронт-месяц GC)",
+        f"- Контракт: **{front.month}**",
+        f"- Расчётная цена: **{_money(front.settle)}** "
+        f"(последняя {_money(front.last)}, изменение {_signed(front.change)})",
+        f"- Объём: {front.volume:,}  •  OI: {front.open_interest:,}"
         if front.volume and front.open_interest else "—",
         "",
     ]
     if notes:
-        lines.append("## Notes")
+        lines.append("## Заметки")
         for n in notes:
             lines.append(f"- {n}")
         lines.append("")
     lines.append("---")
-    lines.append("_Source: CME Daily Settlements (futures)._")
+    lines.append("_Источник: CME Daily Settlements (фьючерсы)._")
     return "\n".join(lines)
 
 
@@ -80,15 +80,16 @@ def main() -> str:
         exps = fetch_option_expirations(drv)
         front_exp = front_monthly_expiration(exps)
         if front_exp is None:
-            notes.append("_No future monthly OG expirations found — "
-                         "skipping options data._")
+            notes.append("_Не найдены будущие месячные экспирации OG — "
+                         "данные по опционам пропущены._")
             return _futures_only(td_f, front, notes)
 
         # 3) Strike-level OI for the front-month chain.
         try:
             td_o, raw_rows = fetch_option_chain(drv, front_exp)
         except Exception as e:  # noqa: BLE001
-            notes.append(f"_Option-chain fetch failed: {type(e).__name__}: {e}._")
+            notes.append(f"_Не удалось получить цепочку опционов: "
+                         f"{type(e).__name__}: {e}._")
             return _futures_only(td_f, front, notes)
 
         # 4) Volume / most-active for the same chain.
@@ -98,7 +99,7 @@ def main() -> str:
                            in most_active_by_volume(vol_rows, n=5)]
         except Exception as e:  # noqa: BLE001
             most_active = []
-            notes.append(f"_Volume summary unavailable: {e}._")
+            notes.append(f"_Сводка по объёмам недоступна: {e}._")
 
         # 5) Globex Trade Browser — public block-trades feed.  Filtered to
         #    gold (GC futures + OG monthly/weekly options).
@@ -109,7 +110,7 @@ def main() -> str:
             gold_blocks = []
             blocks_md = ""
             notes.append(
-                f"_Block-trade scrape failed: {type(e).__name__}: {e}._")
+                f"_Сбор блок-сделок не удался: {type(e).__name__}: {e}._")
 
         # 6) Electronic option trades (QuikStrike Globex Trade Browser).
         #    Returns [] today — see ``electronic_trades.py`` for status.
@@ -118,7 +119,8 @@ def main() -> str:
         except Exception as e:  # noqa: BLE001
             elec_trades = []
             notes.append(
-                f"_Electronic-trade scrape failed: {type(e).__name__}: {e}._")
+                f"_Сбор электронных сделок не удался: "
+                f"{type(e).__name__}: {e}._")
 
     except KeyError as e:
         traceback.print_exc(file=sys.stderr)
@@ -126,17 +128,17 @@ def main() -> str:
             drv.quit()
         except Exception:
             pass
-        return ("# Gold (GC) — Daily Report\n\n"
-                f"_Cannot run: missing env var {e}.  Set CME_USERNAME and "
-                "CME_PASSWORD as Devin secrets._")
+        return ("# Золото (GC) — ежедневный отчёт\n\n"
+                f"_Не удалось запустить: не задана переменная окружения {e}. "
+                "Установите CME_USERNAME и CME_PASSWORD как Devin-secrets._")
     except Exception as e:  # noqa: BLE001
         traceback.print_exc(file=sys.stderr)
         try:
             drv.quit()
         except Exception:
             pass
-        return ("# Gold (GC) — Daily Report\n\n"
-                f"_Run failed: {type(e).__name__}: {e}._")
+        return ("# Золото (GC) — ежедневный отчёт\n\n"
+                f"_Запуск завершился с ошибкой: {type(e).__name__}: {e}._")
     else:
         try:
             drv.quit()
@@ -188,7 +190,8 @@ def _build_flow_map(
     except Exception as e:  # noqa: BLE001
         bars = None
         notes.append(
-            f"_Intraday GC spot feed unavailable: {type(e).__name__}: {e}._")
+            f"_Внутридневной спот-фид по GC недоступен: "
+            f"{type(e).__name__}: {e}._")
 
     # Convert block trades to the unified TradeRecord model.
     try:
@@ -217,7 +220,7 @@ def _build_flow_map(
     if not levels:
         return "", ""
 
-    spot_now = bars.bars[-1].close if bars and bars.bars else None
+    spot_now = bars.closes[-1] if bars and bars.closes else None
     flow_md = render_flow_map(levels, spot=spot_now, top_n=5)
     expected_md = render_expected_move(levels)
     return flow_md, expected_md

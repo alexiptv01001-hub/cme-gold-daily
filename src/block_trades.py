@@ -226,29 +226,44 @@ def fetch_gold_blocks(driver: WebDriver) -> list[BlockTrade]:
     return trades
 
 
+# Russian translations for display only (data layer keeps English keys).
+_SIDE_RU = {"Buy": "Покупка", "Sell": "Продажа"}
+_TYPE_RU = {"Future": "Фьючерс", "Option": "Опцион", "Spread": "Спред",
+            "Strip": "Стрип"}
+
+
+def _ru_side(s: str) -> str:
+    return _SIDE_RU.get(s, s)
+
+
+def _ru_type(t: str) -> str:
+    return _TYPE_RU.get(t, t)
+
+
 def render_blocks_md(trades: list[BlockTrade], top_n: int = 5) -> str:
     """Render the top-N gold block trades as a Markdown bullet list."""
     if not trades:
-        return "_No notable gold block trades reported today._"
+        return "_Сегодня крупных блок-сделок по золоту не зафиксировано._"
     lines = []
     for bt in trades[:top_n]:
         if bt.trade_type == "Spread" and len(bt.legs) > 1:
             legs_txt = " / ".join(
-                f"{l.side} {l.qty} {l.sym} {l.cp_strike}".strip()
+                f"{_ru_side(l.side)} {l.qty} {l.sym} {l.cp_strike}".strip()
                 for l in bt.legs)
-            head = f"- **Spread** ({bt.time_ct} CT)"
+            head = f"- **{_ru_type(bt.trade_type)}** ({bt.time_ct} CT)"
             if bt.net_price is not None:
-                head += f" net **{bt.net_price}**"
+                head += f" нетто **{bt.net_price}**"
             if bt.spread_qty:
-                head += f"  •  size **{bt.spread_qty}**"
+                head += f"  •  размер **{bt.spread_qty}**"
             lines.append(head + ": " + legs_txt)
         else:
             leg = bt.primary_leg
             if leg is None: continue
-            tag = leg.cp_strike if leg.cp_strike else "outright"
+            tag = leg.cp_strike if leg.cp_strike else "аутрайт"
             lines.append(
-                f"- **{bt.trade_type}** ({bt.time_ct} CT): {leg.side} "
-                f"**{leg.qty}** {leg.sym} {tag} @ {leg.price}")
+                f"- **{_ru_type(bt.trade_type)}** ({bt.time_ct} CT): "
+                f"{_ru_side(leg.side)} **{leg.qty}** {leg.sym} {tag} @ "
+                f"{leg.price}")
     return "\n".join(lines)
 
 

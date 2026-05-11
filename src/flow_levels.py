@@ -82,26 +82,26 @@ def levels_for(trade: TradeRecord, strategy: Strategy) -> list[FlowLevel]:
     if sk == "call_long":
         l = legs[0]
         return [lvl(l.strike + l.price, BULLISH_TARGET,
-                    f"buy {l.qty}× {l.strike:g}c @ {l.price:.2f} → "
-                    f"break-even {l.strike + l.price:.2f}",
+                    f"покупка {l.qty}× {l.strike:g}c @ {l.price:.2f} → "
+                    f"безубыток {l.strike + l.price:.2f}",
                     _weight(l.qty, l.price))]
     if sk == "call_short":
         l = legs[0]
         return [lvl(l.strike + l.price, RESISTANCE,
-                    f"sell {l.qty}× {l.strike:g}c @ {l.price:.2f} → "
-                    f"resistance {l.strike + l.price:.2f}",
+                    f"продажа {l.qty}× {l.strike:g}c @ {l.price:.2f} → "
+                    f"сопротивление {l.strike + l.price:.2f}",
                     _weight(l.qty, l.price))]
     if sk == "put_long":
         l = legs[0]
         return [lvl(l.strike - l.price, BEARISH_TARGET,
-                    f"buy {l.qty}× {l.strike:g}p @ {l.price:.2f} → "
-                    f"break-even {l.strike - l.price:.2f}",
+                    f"покупка {l.qty}× {l.strike:g}p @ {l.price:.2f} → "
+                    f"безубыток {l.strike - l.price:.2f}",
                     _weight(l.qty, l.price))]
     if sk == "put_short":
         l = legs[0]
         return [lvl(l.strike - l.price, SUPPORT,
-                    f"sell {l.qty}× {l.strike:g}p @ {l.price:.2f} → "
-                    f"support {l.strike - l.price:.2f}",
+                    f"продажа {l.qty}× {l.strike:g}p @ {l.price:.2f} → "
+                    f"поддержка {l.strike - l.price:.2f}",
                     _weight(l.qty, l.price))]
 
     # ---- Vertical spreads ----
@@ -112,32 +112,32 @@ def levels_for(trade: TradeRecord, strategy: Strategy) -> list[FlowLevel]:
         # Weight by smaller leg's contracts (the spread's actual size).
         wt = _weight(min(lo.qty, hi.qty), net_debit)
         return [lvl(target, BULLISH_TARGET,
-                    f"bull call spread {lo.strike:g}/{hi.strike:g} debit "
-                    f"{net_debit:.2f} → break-even {target:.2f}", wt)]
+                    f"бычий колл-спред {lo.strike:g}/{hi.strike:g} дебет "
+                    f"{net_debit:.2f} → безубыток {target:.2f}", wt)]
     if sk == "call_vertical_bear":
         lo, hi = legs
         net_credit = abs(lo.price - hi.price)
         level = lo.strike + net_credit
         wt = _weight(min(lo.qty, hi.qty), net_credit)
         return [lvl(level, RESISTANCE,
-                    f"bear call spread {lo.strike:g}/{hi.strike:g} credit "
-                    f"{net_credit:.2f} → resistance {level:.2f}", wt)]
+                    f"медвежий колл-спред {lo.strike:g}/{hi.strike:g} кредит "
+                    f"{net_credit:.2f} → сопротивление {level:.2f}", wt)]
     if sk == "put_vertical_bear":
         lo, hi = legs
         net_debit = abs(hi.price - lo.price)
         target = hi.strike - net_debit
         wt = _weight(min(lo.qty, hi.qty), net_debit)
         return [lvl(target, BEARISH_TARGET,
-                    f"bear put spread {hi.strike:g}/{lo.strike:g} debit "
-                    f"{net_debit:.2f} → break-even {target:.2f}", wt)]
+                    f"медвежий пут-спред {hi.strike:g}/{lo.strike:g} дебет "
+                    f"{net_debit:.2f} → безубыток {target:.2f}", wt)]
     if sk == "put_vertical_bull":
         lo, hi = legs
         net_credit = abs(hi.price - lo.price)
         level = hi.strike - net_credit
         wt = _weight(min(lo.qty, hi.qty), net_credit)
         return [lvl(level, SUPPORT,
-                    f"bull put spread {hi.strike:g}/{lo.strike:g} credit "
-                    f"{net_credit:.2f} → support {level:.2f}", wt)]
+                    f"бычий пут-спред {hi.strike:g}/{lo.strike:g} кредит "
+                    f"{net_credit:.2f} → поддержка {level:.2f}", wt)]
 
     # ---- Straddles / strangles ----
     if sk == "straddle_long":
@@ -147,9 +147,9 @@ def levels_for(trade: TradeRecord, strategy: Strategy) -> list[FlowLevel]:
         wt = _weight(min(a.qty, b.qty), total)
         return [
             lvl(s + total, EXPECTED_MOVE_HIGH,
-                f"long {s:g} straddle for {total:.2f} → EM ±{total:.2f}", wt),
+                f"длинный стрэддл {s:g} за {total:.2f} → ОД ±{total:.2f}", wt),
             lvl(s - total, EXPECTED_MOVE_LOW,
-                f"long {s:g} straddle for {total:.2f} → EM ±{total:.2f}", wt),
+                f"длинный стрэддл {s:g} за {total:.2f} → ОД ±{total:.2f}", wt),
         ]
     if sk == "straddle_short":
         a, b = legs
@@ -158,10 +158,10 @@ def levels_for(trade: TradeRecord, strategy: Strategy) -> list[FlowLevel]:
         wt = _weight(min(a.qty, b.qty), total)
         return [
             lvl(s + total, RANGE_HIGH,
-                f"short {s:g} straddle for {total:.2f} → range "
+                f"короткий стрэддл {s:g} за {total:.2f} → диапазон "
                 f"{s-total:.0f}-{s+total:.0f}", wt),
             lvl(s - total, RANGE_LOW,
-                f"short {s:g} straddle for {total:.2f} → range "
+                f"короткий стрэддл {s:g} за {total:.2f} → диапазон "
                 f"{s-total:.0f}-{s+total:.0f}", wt),
         ]
     if sk == "strangle_long":
@@ -170,12 +170,12 @@ def levels_for(trade: TradeRecord, strategy: Strategy) -> list[FlowLevel]:
         wt = _weight(min(put_leg.qty, call_leg.qty), total)
         return [
             lvl(call_leg.strike + total, EXPECTED_MOVE_HIGH,
-                f"long {put_leg.strike:g}p/{call_leg.strike:g}c strangle "
-                f"for {total:.2f} → break {call_leg.strike+total:.2f}",
+                f"длинный стрэнгл {put_leg.strike:g}p/{call_leg.strike:g}c "
+                f"за {total:.2f} → пробой {call_leg.strike+total:.2f}",
                 wt),
             lvl(put_leg.strike - total, EXPECTED_MOVE_LOW,
-                f"long {put_leg.strike:g}p/{call_leg.strike:g}c strangle "
-                f"for {total:.2f} → break {put_leg.strike-total:.2f}",
+                f"длинный стрэнгл {put_leg.strike:g}p/{call_leg.strike:g}c "
+                f"за {total:.2f} → пробой {put_leg.strike-total:.2f}",
                 wt),
         ]
     if sk == "strangle_short":
@@ -184,13 +184,13 @@ def levels_for(trade: TradeRecord, strategy: Strategy) -> list[FlowLevel]:
         wt = _weight(min(put_leg.qty, call_leg.qty), total)
         return [
             lvl(call_leg.strike + total, RANGE_HIGH,
-                f"short {put_leg.strike:g}p/{call_leg.strike:g}c strangle "
-                f"for {total:.2f} → range {put_leg.strike-total:.0f}-"
-                f"{call_leg.strike+total:.0f}", wt),
+                f"короткий стрэнгл {put_leg.strike:g}p/{call_leg.strike:g}c "
+                f"за {total:.2f} → диапазон "
+                f"{put_leg.strike-total:.0f}-{call_leg.strike+total:.0f}", wt),
             lvl(put_leg.strike - total, RANGE_LOW,
-                f"short {put_leg.strike:g}p/{call_leg.strike:g}c strangle "
-                f"for {total:.2f} → range {put_leg.strike-total:.0f}-"
-                f"{call_leg.strike+total:.0f}", wt),
+                f"короткий стрэнгл {put_leg.strike:g}p/{call_leg.strike:g}c "
+                f"за {total:.2f} → диапазон "
+                f"{put_leg.strike-total:.0f}-{call_leg.strike+total:.0f}", wt),
         ]
 
     # ---- Risk reversals ----
@@ -202,10 +202,10 @@ def levels_for(trade: TradeRecord, strategy: Strategy) -> list[FlowLevel]:
         wt_p = _weight(put_leg.qty, put_leg.price)
         return [
             lvl(target, BULLISH_TARGET,
-                f"bull risk reversal: buy {call_leg.strike:g}c / "
-                f"sell {put_leg.strike:g}p (net {net:+.2f})", wt_c),
+                f"бычий risk reversal: покупка {call_leg.strike:g}c / "
+                f"продажа {put_leg.strike:g}p (нетто {net:+.2f})", wt_c),
             lvl(put_leg.strike - put_leg.price, SUPPORT,
-                f"bull RR sold put → support "
+                f"бычий RR — проданный пут → поддержка "
                 f"{put_leg.strike - put_leg.price:.2f}", wt_p),
         ]
     if sk == "risk_reversal_bear":
@@ -216,10 +216,10 @@ def levels_for(trade: TradeRecord, strategy: Strategy) -> list[FlowLevel]:
         wt_c = _weight(call_leg.qty, call_leg.price)
         return [
             lvl(target, BEARISH_TARGET,
-                f"bear risk reversal: buy {put_leg.strike:g}p / "
-                f"sell {call_leg.strike:g}c (net {net:+.2f})", wt_p),
+                f"медвежий risk reversal: покупка {put_leg.strike:g}p / "
+                f"продажа {call_leg.strike:g}c (нетто {net:+.2f})", wt_p),
             lvl(call_leg.strike + call_leg.price, RESISTANCE,
-                f"bear RR sold call → resistance "
+                f"медвежий RR — проданный колл → сопротивление "
                 f"{call_leg.strike + call_leg.price:.2f}", wt_c),
         ]
 
@@ -238,25 +238,26 @@ def _per_leg_levels(l: OptionLeg, sk: str, time_ct: str, venue: str,
         return [FlowLevel(
             price=round(l.strike + l.price, 2), kind=BULLISH_TARGET,
             strategy_kind=sk,
-            description=(f"per-leg long {l.qty}× {l.strike:g}c @ "
+            description=(f"нога лонг {l.qty}× {l.strike:g}c @ "
                          f"{l.price:.2f}"),
             weight=wt, expiry_code=expiry, time_ct=time_ct, venue=venue)]
     if l.is_call and l.side == "Sell":
         return [FlowLevel(
             price=round(l.strike + l.price, 2), kind=RESISTANCE,
             strategy_kind=sk,
-            description=(f"per-leg short {l.qty}× {l.strike:g}c @ "
+            description=(f"нога шорт {l.qty}× {l.strike:g}c @ "
                          f"{l.price:.2f}"),
             weight=wt, expiry_code=expiry, time_ct=time_ct, venue=venue)]
     if (not l.is_call) and l.side == "Buy":
         return [FlowLevel(
             price=round(l.strike - l.price, 2), kind=BEARISH_TARGET,
             strategy_kind=sk,
-            description=(f"per-leg long {l.qty}× {l.strike:g}p @ "
+            description=(f"нога лонг {l.qty}× {l.strike:g}p @ "
                          f"{l.price:.2f}"),
             weight=wt, expiry_code=expiry, time_ct=time_ct, venue=venue)]
     return [FlowLevel(
         price=round(l.strike - l.price, 2), kind=SUPPORT,
         strategy_kind=sk,
-        description=(f"per-leg short {l.qty}× {l.strike:g}p @ {l.price:.2f}"),
+        description=(f"нога шорт {l.qty}× {l.strike:g}p @ "
+                     f"{l.price:.2f}"),
         weight=wt, expiry_code=expiry, time_ct=time_ct, venue=venue)]

@@ -62,15 +62,17 @@ def test_render_flow_map_emits_required_subsections():
         _lvl(4400, BEARISH_TARGET, weight=100),
     ]
     md = render_flow_map(lvls, spot=4700.0)
-    for needle in ("Resistance / range top", "Support / range bottom",
-                   "Bullish targets", "Bearish targets",
+    for needle in ("Сопротивление / верх диапазона",
+                   "Поддержка / низ диапазона",
+                   "Бычьи цели", "Медвежьи цели",
+                   "вес",
                    "$4,800", "$4,500", "$4,900", "$4,400"):
         assert needle in md, f"missing {needle!r}"
 
 
 def test_render_flow_map_handles_empty():
     md = render_flow_map([], spot=4700.0)
-    assert "No flow-derived levels" in md
+    assert "Нет уровней из опционного потока" in md
 
 
 def test_render_flow_map_segregates_per_leg_levels():
@@ -85,14 +87,14 @@ def test_render_flow_map_segregates_per_leg_levels():
     ]
     md = render_flow_map(lvls, spot=4700.0)
     # Primary section must show the call_short level
-    assert "Resistance / range top" in md
+    assert "Сопротивление / верх диапазона" in md
     assert "$4,800" in md
     # The per-leg subsection must be its own block
-    assert "~per-leg" in md
+    assert "~по ногам" in md
     # Complex/calendar levels must NOT appear in primary buckets — they must
     # be under the ~per-leg block.  We verify by splitting on the marker and
     # checking the prices only show after it.
-    primary, _, perleg = md.partition("~per-leg")
+    primary, _, perleg = md.partition("~по ногам")
     assert "$7,500" not in primary
     assert "$3,600" not in primary
     assert "$7,500" in perleg
@@ -103,4 +105,4 @@ def test_render_flow_map_skips_per_leg_block_when_empty():
     """If every trade is a recognised structure, no ~per-leg block."""
     lvls = [_lvl(4800, RESISTANCE, weight=500, strategy_kind="call_short")]
     md = render_flow_map(lvls, spot=4700.0)
-    assert "~per-leg" not in md
+    assert "~по ногам" not in md
